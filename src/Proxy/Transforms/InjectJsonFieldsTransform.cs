@@ -35,8 +35,16 @@ internal sealed class InjectJsonFieldsTransform(IReadOnlyDictionary<string, stri
             obj[key] = TryParseJson(value);
         }
 
-        var merged = obj.ToJsonString();
-        context.ProxyRequest.Content = new StringContent(merged, Encoding.UTF8, "application/json");
+        var merged = Encoding.UTF8.GetBytes(obj.ToJsonString());
+        request.Body = new MemoryStream(merged);
+        request.ContentLength = merged.Length;
+
+        // YARP copies Content-Length onto ProxyRequest.Content before request transforms run,
+        // so the previously-copied length must be updated to match the rewritten body.
+        if (context.ProxyRequest.Content is not null)
+        {
+            context.ProxyRequest.Content.Headers.ContentLength = merged.Length;
+        }
     }
 
     private static JsonNode? TryParseJson(string value)
@@ -48,7 +56,7 @@ internal sealed class InjectJsonFieldsTransform(IReadOnlyDictionary<string, stri
 
 internal sealed class InjectJsonFieldsTransformProvider : ITransformProvider
 {
-    private const string Prefix = "InjectJsonField:";
+    private const string Prefix = "InjectJsonField.";
 
     public void ValidateRoute(TransformRouteValidationContext context) { }
     public void ValidateCluster(TransformClusterValidationContext context) { }
