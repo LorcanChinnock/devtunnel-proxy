@@ -1,6 +1,6 @@
-# aspire-tunnel-proxy
+# devtunnel-proxy
 
-[![CI](https://github.com/LorcanChinnock/aspire-tunnel-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/LorcanChinnock/aspire-tunnel-proxy/actions/workflows/ci.yml)
+[![CI](https://github.com/LorcanChinnock/devtunnel-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/LorcanChinnock/devtunnel-proxy/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/download/dotnet/10.0)
 
@@ -15,8 +15,8 @@ You need a public HTTPS URL that points at something running on your laptop — 
 ## Quickstart
 
 ```bash
-git clone https://github.com/LorcanChinnock/aspire-tunnel-proxy.git
-cd aspire-tunnel-proxy
+git clone https://github.com/LorcanChinnock/devtunnel-proxy.git
+cd devtunnel-proxy
 dotnet run --project src/AppHost
 ```
 
@@ -155,7 +155,7 @@ YARP routes/clusters fully follow the upstream schema — see [YARP config files
 
 Set `DevTunnel:AnonymousAccess: false` in `src/AppHost/appsettings.json` for a private tunnel. Recipients then need a Microsoft/GitHub login the owner has authorised, or an `X-Tunnel-Authorization` token from `devtunnel token`. Note: private tunnels block cross-origin browser callers — `fetch()` from a deployed SPA on another origin can't complete the interactive sign-in.
 
-To report a vulnerability privately, please open a [GitHub security advisory](https://github.com/LorcanChinnock/aspire-tunnel-proxy/security/advisories/new) rather than a public issue.
+To report a vulnerability privately, please open a [GitHub security advisory](https://github.com/LorcanChinnock/devtunnel-proxy/security/advisories/new) rather than a public issue.
 
 ## Project layout
 
