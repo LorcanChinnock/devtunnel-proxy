@@ -15,10 +15,10 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore aspire-tunnel-proxy.sln
+        run: dotnet restore devtunnel-proxy.sln
 
       - name: Build
-        run: dotnet build aspire-tunnel-proxy.sln --configuration Release --no-restore
+        run: dotnet build devtunnel-proxy.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test aspire-tunnel-proxy.sln --configuration Release --no-build --verbosity normal
+        run: dotnet test devtunnel-proxy.sln --configuration Release --no-build --verbosity normal
