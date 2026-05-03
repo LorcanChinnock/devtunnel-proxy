@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 using Yarp.ReverseProxy.Transforms;
 using Yarp.ReverseProxy.Transforms.Builder;
 
-namespace AspireTunnelProxy.Transforms;
+namespace DevTunnelProxy.Transforms;
 
 internal sealed class InjectJsonFieldsTransform(IReadOnlyDictionary<string, string> fields) : RequestTransform
 {

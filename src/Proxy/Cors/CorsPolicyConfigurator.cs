@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Cors.Infrastructure;
 
-namespace AspireTunnelProxy.Cors;
+namespace DevTunnelProxy.Cors;
 
 internal static class CorsPolicyConfigurator
 {
