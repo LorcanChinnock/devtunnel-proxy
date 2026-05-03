@@ -6,7 +6,7 @@
 
 A config-driven local reverse proxy with a stable public HTTPS URL. Edit one JSON file, run one command, share the link.
 
-Built on [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/), [YARP](https://learn.microsoft.com/aspnet/core/fundamentals/servers/yarp/), and [Microsoft Dev Tunnels](https://learn.microsoft.com/azure/developer/dev-tunnels/).
+Built on [.NET Aspire](https://github.com/microsoft/aspire), [YARP](https://github.com/dotnet/yarp), and [Microsoft Dev Tunnels](https://github.com/microsoft/dev-tunnels).
 
 ## Why this exists
 
