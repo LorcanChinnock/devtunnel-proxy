@@ -19,7 +19,6 @@ internal sealed class InjectJsonFieldsTransform(IReadOnlyDictionary<string, stri
         }
 
         request.EnableBuffering();
-        request.Body.Position = 0;
         using var reader = new StreamReader(request.Body, Encoding.UTF8, leaveOpen: true);
         var original = await reader.ReadToEndAsync(context.HttpContext.RequestAborted);
         request.Body.Position = 0;

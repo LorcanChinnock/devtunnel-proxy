@@ -28,17 +28,16 @@ Works identically on macOS, Linux, and Windows (PowerShell or `cmd`). On first r
 
 1. Open the Aspire dashboard URL printed in the terminal.
 2. Click the `tunnel` resource and copy its `https://aspire-tunnel-proxy-*.devtunnels.ms` URL.
-3. Edit `src/Proxy/appsettings.json` — change `Clusters.default.Destinations.primary.Address` to the local or remote URL you want to forward to. Save; YARP hot-reloads, no restart.
-4. Edit `src/AppHost/appsettings.json` — change `DevTunnel:Id` to your own globally-unique slug (a-z, 0-9, hyphen) so collaborators get their own stable URL, and toggle `DevTunnel:AnonymousAccess` to control whether the tunnel URL is public.
-5. (Optional) Tweak `Cors:Policies` in `src/Proxy/appsettings.json` to control which browser origins can call through. Restart required for CORS edits.
-6. (Optional) Add `Transforms` entries to a route to inject request headers server-side.
-7. (Optional) Add `Metadata` entries with the `InjectJsonField:` prefix to merge fields into JSON request bodies before they reach the upstream.
+3. Edit `src/Proxy/appsettings.json` — point `Clusters.default.Destinations.primary.Address` at the URL you want to forward to. Save; YARP hot-reloads, no restart.
+4. Edit `src/AppHost/appsettings.json` — change `DevTunnel:Id` to your own globally-unique slug (a-z, 0-9, hyphen) so collaborators get their own stable URL.
+
+Optional features: [CORS](#cors), [request header injection](#header-injection), [JSON body field injection](#json-body-field-injection), [private tunnel](#security).
 
 YARP route/cluster reference: <https://learn.microsoft.com/aspnet/core/fundamentals/servers/yarp/config-files>.
 
 ### CORS
 
-Declare named CORS policies under `Cors:Policies` and reference them from any route via the standard YARP `CorsPolicy` field:
+Declare named CORS policies under `Cors:Policies`, then reference them from any route via the standard YARP `CorsPolicy` field. The bundled default policy is wide-open:
 
 ```json
 "Cors": {
@@ -55,29 +54,35 @@ Declare named CORS policies under `Cors:Policies` and reference them from any ro
 }
 ```
 
-- `["*"]` for `AllowedOrigins`, `AllowedMethods`, or `AllowedHeaders` enables the matching `AllowAny*` policy.
-- An explicit list narrows the policy to those values.
-- `AllowCredentials: true` combined with `AllowedOrigins: ["*"]` is invalid — list explicit origins instead. Startup throws `InvalidOperationException` with the policy name.
+- `["*"]` for `AllowedOrigins`, `AllowedMethods`, or `AllowedHeaders` enables the matching `AllowAny*` rule. An explicit list narrows the policy to those values.
+- `AllowCredentials: true` combined with `AllowedOrigins: ["*"]` is invalid — startup throws `InvalidOperationException` with the policy name. List explicit origins instead.
 - `PreflightMaxAgeSeconds` (optional) sets the `Access-Control-Max-Age` response header for preflight caching.
 - Routes opt in by setting `CorsPolicy: "<name>"`. ASP.NET Core CORS middleware short-circuits `OPTIONS` preflights so YARP never forwards them upstream.
-- CORS policies are read at startup. Editing `Cors:Policies` requires an AppHost restart. YARP `Routes`/`Clusters` continue to hot-reload as before.
+- CORS policies are read at startup. Editing `Cors:Policies` requires an AppHost restart. `Routes` and `Clusters` continue to hot-reload as before.
 
 Reference: <https://learn.microsoft.com/aspnet/core/security/cors>.
 
 ### Header injection
 
-YARP's per-route `Transforms` block sets or appends request headers before forwarding:
+Add a `Transforms` array inside a route to set or append request headers before forwarding:
 
 ```json
-"Transforms": [
-  { "RequestHeader": "X-Injected-Header", "Set": "replace-or-remove-me" },
-  { "RequestHeader": "X-Trace", "Append": "proxy" }
-]
+"Routes": {
+  "default": {
+    "ClusterId": "default",
+    "CorsPolicy": "default",
+    "Match": { "Path": "{**catch-all}" },
+    "Transforms": [
+      { "RequestHeader": "X-Server-Secret", "Set": "your-secret-here" },
+      { "RequestHeader": "X-Trace", "Append": "proxy" }
+    ]
+  }
+}
 ```
 
 - `Set` overwrites a client-supplied value of the same name.
 - `Append` adds a value without replacing existing ones (multiple values become comma-joined).
-- Headers from the client pass through by default.
+- Client-supplied headers pass through by default.
 
 Reference: <https://microsoft.github.io/reverse-proxy/articles/transforms-request.html>.
 
@@ -86,10 +91,17 @@ Reference: <https://microsoft.github.io/reverse-proxy/articles/transforms-reques
 For upstreams that authenticate via JSON body fields rather than headers, declare the fields to merge under the route's `Metadata` block with the `InjectJsonField:` prefix:
 
 ```json
-"Metadata": {
-  "InjectJsonField:ClientSecret": "replace-me-with-real-secret",
-  "InjectJsonField:Count": "42",
-  "InjectJsonField:Nested": "{\"k\":\"v\"}"
+"Routes": {
+  "default": {
+    "ClusterId": "default",
+    "CorsPolicy": "default",
+    "Match": { "Path": "{**catch-all}" },
+    "Metadata": {
+      "InjectJsonField:AuthToken": "your-server-side-secret",
+      "InjectJsonField:Count": "42",
+      "InjectJsonField:Nested": "{\"k\":\"v\"}"
+    }
+  }
 }
 ```
 
@@ -100,9 +112,9 @@ For upstreams that authenticate via JSON body fields rather than headers, declar
 
 ## Security
 
-`DevTunnel:AnonymousAccess: true` makes the tunnel URL **publicly reachable by anyone who knows it**. Do not proxy to anything with secrets, dev databases, or unauthenticated admin surfaces.
+`DevTunnel:AnonymousAccess: true` (the default) makes the tunnel URL **publicly reachable by anyone who knows it**. Don't proxy anything with secrets, dev databases, or unauthenticated admin surfaces.
 
-To make the tunnel private, set `DevTunnel:AnonymousAccess` to `false` in `src/AppHost/appsettings.json`. Recipients will then need a Microsoft or GitHub login that the tunnel owner has authorised.
+To make the tunnel private, set `DevTunnel:AnonymousAccess` to `false` in `src/AppHost/appsettings.json`. Recipients then need a Microsoft or GitHub login the tunnel owner has authorised, or an `X-Tunnel-Authorization` token issued by `devtunnel token`. Note: a private tunnel breaks cross-origin browser callers — `fetch()` from a deployed SPA on another origin cannot complete the interactive sign-in flow.
 
 ## Layout
 
