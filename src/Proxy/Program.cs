@@ -1,5 +1,5 @@
-using DevTunnelProxy.Cors;
-using DevTunnelProxy.Transforms;
+using Proxy.Cors;
+using Proxy.Transforms;
 
 var builder = WebApplication.CreateBuilder(args);
 

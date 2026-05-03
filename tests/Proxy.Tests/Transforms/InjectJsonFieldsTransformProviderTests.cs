@@ -1,6 +1,5 @@
-using DevTunnelProxy.Transforms;
+using Proxy.Transforms;
 using Yarp.ReverseProxy.Configuration;
-using Yarp.ReverseProxy.Transforms;
 using Yarp.ReverseProxy.Transforms.Builder;
 
 namespace Proxy.Tests.Transforms;

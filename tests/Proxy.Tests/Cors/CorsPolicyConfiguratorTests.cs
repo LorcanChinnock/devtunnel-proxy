@@ -1,6 +1,6 @@
-using DevTunnelProxy.Cors;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.Configuration;
+using Proxy.Cors;
 
 namespace Proxy.Tests.Cors;
 

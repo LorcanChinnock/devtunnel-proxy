@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using DevTunnelProxy.Transforms;
 using Microsoft.AspNetCore.Http;
+using Proxy.Transforms;
 using Yarp.ReverseProxy.Transforms;
 
 namespace Proxy.Tests.Transforms;
