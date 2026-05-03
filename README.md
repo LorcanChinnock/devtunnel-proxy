@@ -1,100 +1,131 @@
 # aspire-tunnel-proxy
 
-A tiny, config-driven local reverse proxy with a stable public HTTPS URL. Edit a JSON file to declare what to forward where, run one command, share the link.
+[![CI](https://github.com/LorcanChinnock/aspire-tunnel-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/LorcanChinnock/aspire-tunnel-proxy/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/download/dotnet/10.0)
 
-Built on [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) + [YARP](https://learn.microsoft.com/aspnet/core/fundamentals/servers/yarp/) + [Microsoft Dev Tunnels](https://learn.microsoft.com/azure/developer/dev-tunnels/).
+A config-driven local reverse proxy with a stable public HTTPS URL. Edit one JSON file, run one command, share the link.
 
-## Prerequisites
+Built on [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/), [YARP](https://learn.microsoft.com/aspnet/core/fundamentals/servers/yarp/), and [Microsoft Dev Tunnels](https://learn.microsoft.com/azure/developer/dev-tunnels/).
 
-- **.NET 10 SDK** — <https://dotnet.microsoft.com/download/dotnet/10.0>
-- **`devtunnel` CLI** — install per OS:
-  - macOS: `brew install --cask devtunnel`
-  - Windows: `winget install Microsoft.devtunnel`
-  - Linux: `curl -sL https://aka.ms/DevTunnelCliInstall | bash`
-  - More: <https://learn.microsoft.com/azure/developer/dev-tunnels/get-started#install>
-- A Microsoft or GitHub account (the `devtunnel` CLI prompts you to sign in on first run; Aspire handles this automatically).
+## Why this exists
 
-## Run it
+You need a public HTTPS URL that points at something running on your laptop — to receive a webhook, demo a prototype, or test a mobile app against a local API. ngrok works, but you pay for stable URLs and lose control over headers, CORS, and request shaping. This project is the same idea, free, and you keep full control: add CORS, inject auth headers or JSON fields, hot-reload routes from a config file.
+
+## Quickstart
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/LorcanChinnock/aspire-tunnel-proxy.git
 cd aspire-tunnel-proxy
 dotnet run --project src/AppHost
 ```
 
-Works identically on macOS, Linux, and Windows (PowerShell or `cmd`). On first run, a browser window opens for `devtunnel` sign-in.
-
-## Use it
+First run opens a browser for `devtunnel` sign-in. Then:
 
 1. Open the Aspire dashboard URL printed in the terminal.
-2. Click the `tunnel` resource and copy its `https://aspire-tunnel-proxy-*.devtunnels.ms` URL.
-3. Edit `src/Proxy/appsettings.json` — point `Clusters.default.Destinations.primary.Address` at the URL you want to forward to. Save; YARP hot-reloads, no restart.
-4. Edit `src/AppHost/appsettings.json` — change `DevTunnel:Id` to your own globally-unique slug (a-z, 0-9, hyphen) so collaborators get their own stable URL.
+2. Click the `tunnel` resource — copy its `https://*.devtunnels.ms` URL.
+3. Edit `src/Proxy/appsettings.json` → set `Clusters.default.Destinations.primary.Address` to your upstream. YARP hot-reloads — no restart needed.
+4. Edit `src/AppHost/appsettings.json` → change `DevTunnel:Id` to a unique slug (a–z, 0–9, `-`) so collaborators get distinct stable URLs.
 
-Optional features: [CORS](#cors), [request header injection](#header-injection), [JSON body field injection](#json-body-field-injection), [private tunnel](#security).
+That's it. Anything hitting the tunnel URL is forwarded to your configured destination.
 
-YARP route/cluster reference: <https://learn.microsoft.com/aspnet/core/fundamentals/servers/yarp/config-files>.
+### Requirements
 
-### CORS
+| | Version |
+|---|---|
+| .NET SDK | 10.0+ |
+| `devtunnel` CLI | latest ([install](https://learn.microsoft.com/azure/developer/dev-tunnels/get-started#install)) |
+| Account | Microsoft or GitHub (for `devtunnel` sign-in) |
 
-Declare named CORS policies under `Cors:Policies`, then reference them from any route via the standard YARP `CorsPolicy` field. The bundled default policy is wide-open:
+`devtunnel` install one-liners — macOS: `brew install --cask devtunnel`; Windows: `winget install Microsoft.devtunnel`; Linux: `curl -sL https://aka.ms/DevTunnelCliInstall | bash`.
 
-```json
-"Cors": {
-  "Policies": {
-    "default": {
-      "AllowedOrigins": ["*"],
-      "AllowedMethods": ["*"],
-      "AllowedHeaders": ["*"],
-      "ExposedHeaders": [],
-      "AllowCredentials": false,
-      "PreflightMaxAgeSeconds": null
+## Use cases
+
+### Receive webhooks from third-party services
+
+Stripe, GitHub, Slack, etc. need a public HTTPS endpoint to send events. Point the proxy at your local handler, paste the tunnel URL into the provider's webhook config.
+
+```jsonc
+// src/Proxy/appsettings.json
+"Clusters": {
+  "default": {
+    "Destinations": {
+      "primary": { "Address": "http://localhost:5050/" }
     }
   }
 }
 ```
 
-- `["*"]` for `AllowedOrigins`, `AllowedMethods`, or `AllowedHeaders` enables the matching `AllowAny*` rule. An explicit list narrows the policy to those values.
-- `AllowCredentials: true` combined with `AllowedOrigins: ["*"]` is invalid — startup throws `InvalidOperationException` with the policy name. List explicit origins instead.
-- `PreflightMaxAgeSeconds` (optional) sets the `Access-Control-Max-Age` response header for preflight caching.
-- Routes opt in by setting `CorsPolicy: "<name>"`. ASP.NET Core CORS middleware short-circuits `OPTIONS` preflights so YARP never forwards them upstream.
-- CORS policies are read at startup. Editing `Cors:Policies` requires an AppHost restart. `Routes` and `Clusters` continue to hot-reload as before.
+Now `https://<your-slug>.devtunnels.ms/stripe/events` reaches `http://localhost:5050/stripe/events`.
 
-Reference: <https://learn.microsoft.com/aspnet/core/security/cors>.
+### Test a local API from a real mobile device
 
-### Header injection
+Phones, tablets, and other dev machines can't reach `localhost:5000`. Run the proxy, give them the tunnel URL — works over cellular, hotel Wi-Fi, anywhere.
 
-Add a `Transforms` array inside a route to set or append request headers before forwarding:
+### Demo a prototype to a teammate
 
-```json
+```bash
+dotnet run --project src/AppHost
+# share the printed devtunnels.ms URL
+```
+
+Stable across restarts as long as `DevTunnel:Id` doesn't change.
+
+### Add CORS to an upstream that doesn't support it
+
+Wrap a bare API with browser-friendly CORS without modifying the upstream:
+
+```jsonc
+"Cors": {
+  "Policies": {
+    "default": {
+      "AllowedOrigins": ["https://my-spa.example.com"],
+      "AllowedMethods": ["GET", "POST"],
+      "AllowedHeaders": ["*"],
+      "AllowCredentials": false
+    }
+  }
+},
+"ReverseProxy": {
+  "Routes": {
+    "default": {
+      "ClusterId": "default",
+      "CorsPolicy": "default",
+      "Match": { "Path": "{**catch-all}" }
+    }
+  }
+}
+```
+
+`["*"]` enables `AllowAny*`. Combining `AllowedOrigins: ["*"]` with `AllowCredentials: true` is invalid and throws at startup — list explicit origins instead.
+
+### Inject auth headers before forwarding
+
+Public-facing tunnel, secret-bearing upstream. Use route transforms:
+
+```jsonc
 "Routes": {
   "default": {
     "ClusterId": "default",
-    "CorsPolicy": "default",
     "Match": { "Path": "{**catch-all}" },
     "Transforms": [
-      { "RequestHeader": "X-Server-Secret", "Set": "your-secret-here" },
+      { "RequestHeader": "X-Api-Key", "Set": "your-secret-here" },
       { "RequestHeader": "X-Trace", "Append": "proxy" }
     ]
   }
 }
 ```
 
-- `Set` overwrites a client-supplied value of the same name.
-- `Append` adds a value without replacing existing ones (multiple values become comma-joined).
-- Client-supplied headers pass through by default.
+`Set` overwrites client-supplied values. `Append` adds without replacing.
 
-Reference: <https://microsoft.github.io/reverse-proxy/articles/transforms-request.html>.
+### Inject auth fields into JSON request bodies
 
-### JSON body field injection
+For upstreams that authenticate via body fields, not headers:
 
-For upstreams that authenticate via JSON body fields rather than headers, declare the fields to merge under the route's `Metadata` block with the `InjectJsonField:` prefix:
-
-```json
+```jsonc
 "Routes": {
   "default": {
     "ClusterId": "default",
-    "CorsPolicy": "default",
     "Match": { "Path": "{**catch-all}" },
     "Metadata": {
       "InjectJsonField:AuthToken": "your-server-side-secret",
@@ -105,25 +136,41 @@ For upstreams that authenticate via JSON body fields rather than headers, declar
 }
 ```
 
-- Fields are merged into the top level of the JSON request body before forwarding.
-- Each value is parsed as JSON first: `"true"` becomes a boolean, `"42"` becomes a number, `"{\"k\":\"v\"}"` becomes a nested object. Anything that isn't valid JSON is injected as a raw string.
-- If a client-supplied field collides with an injected key, the injected value wins.
-- Skipped silently when the request `Content-Type` is not `application/json`, the body is empty, or the parsed JSON isn't an object — the body passes through unchanged so the upstream's own validation surfaces the error.
+Each value parses as JSON first — `"42"` becomes a number, `"true"` a boolean, `"{...}"` a nested object. Anything else is injected as a string. Skipped silently when the body isn't JSON, is empty, or isn't an object.
+
+## Configuration reference
+
+| File | Purpose |
+|---|---|
+| `src/AppHost/appsettings.json` | Tunnel ID, public/private toggle |
+| `src/Proxy/appsettings.json` | Routes, clusters, CORS policies, transforms |
+
+YARP routes/clusters fully follow the upstream schema — see [YARP config files](https://learn.microsoft.com/aspnet/core/fundamentals/servers/yarp/config-files).
+
+**Hot reload:** `Routes` and `Clusters` reload on save with no restart. `Cors:Policies` are read at startup — changes need an AppHost restart.
 
 ## Security
 
-`DevTunnel:AnonymousAccess: true` (the default) makes the tunnel URL **publicly reachable by anyone who knows it**. Don't proxy anything with secrets, dev databases, or unauthenticated admin surfaces.
+`DevTunnel:AnonymousAccess: true` (the default) makes the tunnel URL **publicly reachable by anyone who knows it**. Don't proxy anything with secrets, dev databases, or unauthenticated admin surfaces over an anonymous tunnel.
 
-To make the tunnel private, set `DevTunnel:AnonymousAccess` to `false` in `src/AppHost/appsettings.json`. Recipients then need a Microsoft or GitHub login the tunnel owner has authorised, or an `X-Tunnel-Authorization` token issued by `devtunnel token`. Note: a private tunnel breaks cross-origin browser callers — `fetch()` from a deployed SPA on another origin cannot complete the interactive sign-in flow.
+Set `DevTunnel:AnonymousAccess: false` in `src/AppHost/appsettings.json` for a private tunnel. Recipients then need a Microsoft/GitHub login the owner has authorised, or an `X-Tunnel-Authorization` token from `devtunnel token`. Note: private tunnels block cross-origin browser callers — `fetch()` from a deployed SPA on another origin can't complete the interactive sign-in.
 
-## Layout
+To report a vulnerability privately, please open a [GitHub security advisory](https://github.com/LorcanChinnock/aspire-tunnel-proxy/security/advisories/new) rather than a public issue.
+
+## Project layout
 
 ```
 src/
-├── AppHost/   .NET Aspire app host: wires the proxy to a Dev Tunnel
-└── Proxy/     ASP.NET Core + YARP: routes/clusters live in appsettings.json
+├── AppHost/   .NET Aspire app host — wires the proxy to a Dev Tunnel
+└── Proxy/     ASP.NET Core + YARP — routes/clusters live in appsettings.json
+tests/
+└── Proxy.Tests/   xUnit v3 integration + unit tests
 ```
+
+## Contributing
+
+Issues and pull requests welcome. PRs run a build + test gate via [GitHub Actions](.github/workflows/ci.yml) and require one CODEOWNER review before merge.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE).
