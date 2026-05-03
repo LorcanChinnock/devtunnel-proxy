@@ -23,8 +23,6 @@ internal sealed class InjectJsonFieldsTransform(IReadOnlyDictionary<string, stri
         var original = await reader.ReadToEndAsync(context.HttpContext.RequestAborted);
         request.Body.Position = 0;
 
-        if (string.IsNullOrWhiteSpace(original)) return;
-
         JsonNode? root;
         try { root = JsonNode.Parse(original); }
         catch (JsonException) { return; }
