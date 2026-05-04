@@ -157,6 +157,24 @@ Set `DevTunnel:AnonymousAccess: false` in `src/AppHost/appsettings.json` for a p
 
 To report a vulnerability privately, please open a [GitHub security advisory](https://github.com/LorcanChinnock/devtunnel-proxy/security/advisories/new) rather than a public issue.
 
+## Troubleshooting
+
+### `An item with the same key has already been added. Key: host`
+
+Aspire startup fails with `Failed to create dev tunnel '<id>'` and the inner error is `An item with the same key has already been added. Key: host`. The same string also appears if you run `devtunnel show <id>` directly.
+
+This is a bug in the `devtunnel` CLI's tunnel-access-token cache: two cached entries collide on the scope key `host`, and every partial-ID lookup throws while deserializing the cache. Logging out (`devtunnel user logout`) does **not** clear it — the data lives in the OS credential store under a separate entry.
+
+The AppHost runs a startup pre-flight check that detects this and throws with the same fix instructions. To clear the cache:
+
+| OS | Command |
+|---|---|
+| macOS | `security delete-generic-password -s tunnels -a "https://global.rel.tunnels.api.visualstudio.com/auth/tunnels"` |
+| Linux | Remove the libsecret item with label `tunnels` and account `…/auth/tunnels` (e.g. via `secret-tool clear` or Seahorse). |
+| Windows | Open Credential Manager → Windows Credentials → remove the `tunnels` entry whose target is `…/auth/tunnels`. |
+
+After clearing, re-run — the CLI repopulates the cache cleanly. Your user login (the `auth/github` or `auth/microsoft` entry) is untouched.
+
 ## Project layout
 
 ```
