@@ -22,6 +22,13 @@ internal sealed class ProxyAppFactory : WebApplicationFactory<Program>
         {
             var overrides = new Dictionary<string, string?>
             {
+                ["Cors:Policies:AllowAll:AllowedOrigins:0"] = "*",
+                ["Cors:Policies:AllowAll:AllowedMethods:0"] = "*",
+                ["Cors:Policies:AllowAll:AllowedHeaders:0"] = "*",
+                ["Cors:Policies:AllowAll:AllowCredentials"] = "false",
+                ["ReverseProxy:Routes:default:ClusterId"] = "default",
+                ["ReverseProxy:Routes:default:CorsPolicy"] = "AllowAll",
+                ["ReverseProxy:Routes:default:Match:Path"] = "{**catch-all}",
                 ["ReverseProxy:Clusters:default:Destinations:primary:Address"] = _upstreamUrl,
             };
             foreach (var kvp in _extraConfig)

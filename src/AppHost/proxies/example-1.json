@@ -1,0 +1,32 @@
+{
+  "DevTunnel": {
+    "AnonymousAccess": true
+  },
+  "Cors": {
+    "Policies": {
+      "AllowAll": {
+        "AllowedOrigins": ["*"],
+        "AllowedMethods": ["*"],
+        "AllowedHeaders": ["*"],
+        "ExposedHeaders": [],
+        "AllowCredentials": false
+      }
+    }
+  },
+  "ReverseProxy": {
+    "Routes": {
+      "default": {
+        "ClusterId": "default",
+        "CorsPolicy": "AllowAll",
+        "Match": { "Path": "{**catch-all}" }
+      }
+    },
+    "Clusters": {
+      "default": {
+        "Destinations": {
+          "primary": { "Address": "https://google.com/" }
+        }
+      }
+    }
+  }
+}

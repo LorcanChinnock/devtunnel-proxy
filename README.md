@@ -23,11 +23,25 @@ dotnet run --project src/AppHost
 First run opens a browser for `devtunnel` sign-in. Then:
 
 1. Open the Aspire dashboard URL printed in the terminal.
-2. Click the `tunnel` resource — copy its `https://*.devtunnels.ms` URL.
-3. Edit `src/Proxy/appsettings.json` → set `Clusters.default.Destinations.primary.Address` to your upstream. YARP hot-reloads — no restart needed.
-4. Edit `src/AppHost/appsettings.json` → change `DevTunnel:Id` to a unique slug (a–z, 0–9, `-`) so collaborators get distinct stable URLs.
+2. Click the `tunnel-example` resource — copy its `https://*.devtunnels.ms` URL.
+3. Edit `src/AppHost/proxies/example.json` → set `ReverseProxy.Clusters.default.Destinations.primary.Address` to your upstream. YARP hot-reloads — no restart needed.
+4. To publish under a different stable URL, rename the file (e.g. `mv example.json my-slug.json`) and restart. The filename is the slug.
 
 That's it. Anything hitting the tunnel URL is forwarded to your configured destination.
+
+### Add another proxy
+
+Drop a second JSON file in `src/AppHost/proxies/`:
+
+```bash
+cp src/AppHost/proxies/example.json src/AppHost/proxies/api.json
+# edit api.json — point Address at a different upstream
+dotnet run --project src/AppHost
+```
+
+The dashboard now shows two pairs: `proxy-example` + `tunnel-example` and `proxy-api` + `tunnel-api`, each with its own public URL. Pairs are static — Ctrl+C and re-run to add or remove one.
+
+Filename rules: lowercase letters, digits, and hyphens only; 1–32 characters; must start and end alphanumeric. Bad filenames fail AppHost startup with a clear message.
 
 ### Requirements
 
@@ -46,11 +60,22 @@ That's it. Anything hitting the tunnel URL is forwarded to your configured desti
 Stripe, GitHub, Slack, etc. need a public HTTPS endpoint to send events. Point the proxy at your local handler, paste the tunnel URL into the provider's webhook config.
 
 ```jsonc
-// src/Proxy/appsettings.json
-"Clusters": {
-  "default": {
-    "Destinations": {
-      "primary": { "Address": "http://localhost:5050/" }
+// src/AppHost/proxies/webhooks.json
+{
+  "DevTunnel": { "AnonymousAccess": true },
+  "ReverseProxy": {
+    "Routes": {
+      "default": {
+        "ClusterId": "default",
+        "Match": { "Path": "{**catch-all}" }
+      }
+    },
+    "Clusters": {
+      "default": {
+        "Destinations": {
+          "primary": { "Address": "http://localhost:5050/" }
+        }
+      }
     }
   }
 }
@@ -69,29 +94,40 @@ dotnet run --project src/AppHost
 # share the printed devtunnels.ms URL
 ```
 
-Stable across restarts as long as `DevTunnel:Id` doesn't change.
+Stable across restarts as long as the proxy filename doesn't change.
 
 ### Add CORS to an upstream that doesn't support it
 
 Wrap a bare API with browser-friendly CORS without modifying the upstream:
 
 ```jsonc
-"Cors": {
-  "Policies": {
-    "default": {
-      "AllowedOrigins": ["https://my-spa.example.com"],
-      "AllowedMethods": ["GET", "POST"],
-      "AllowedHeaders": ["*"],
-      "AllowCredentials": false
+// src/AppHost/proxies/cors-bridge.json
+{
+  "DevTunnel": { "AnonymousAccess": true },
+  "Cors": {
+    "Policies": {
+      "default": {
+        "AllowedOrigins": ["https://my-spa.example.com"],
+        "AllowedMethods": ["GET", "POST"],
+        "AllowedHeaders": ["*"],
+        "AllowCredentials": false
+      }
     }
-  }
-},
-"ReverseProxy": {
-  "Routes": {
-    "default": {
-      "ClusterId": "default",
-      "CorsPolicy": "default",
-      "Match": { "Path": "{**catch-all}" }
+  },
+  "ReverseProxy": {
+    "Routes": {
+      "default": {
+        "ClusterId": "default",
+        "CorsPolicy": "default",
+        "Match": { "Path": "{**catch-all}" }
+      }
+    },
+    "Clusters": {
+      "default": {
+        "Destinations": {
+          "primary": { "Address": "http://localhost:5050/" }
+        }
+      }
     }
   }
 }
@@ -104,14 +140,27 @@ Wrap a bare API with browser-friendly CORS without modifying the upstream:
 Public-facing tunnel, secret-bearing upstream. Use route transforms:
 
 ```jsonc
-"Routes": {
-  "default": {
-    "ClusterId": "default",
-    "Match": { "Path": "{**catch-all}" },
-    "Transforms": [
-      { "RequestHeader": "X-Api-Key", "Set": "your-secret-here" },
-      { "RequestHeader": "X-Trace", "Append": "proxy" }
-    ]
+// src/AppHost/proxies/auth-injection.json
+{
+  "DevTunnel": { "AnonymousAccess": true },
+  "ReverseProxy": {
+    "Routes": {
+      "default": {
+        "ClusterId": "default",
+        "Match": { "Path": "{**catch-all}" },
+        "Transforms": [
+          { "RequestHeader": "X-Api-Key", "Set": "your-secret-here" },
+          { "RequestHeader": "X-Trace", "Append": "proxy" }
+        ]
+      }
+    },
+    "Clusters": {
+      "default": {
+        "Destinations": {
+          "primary": { "Address": "http://localhost:5050/" }
+        }
+      }
+    }
   }
 }
 ```
@@ -123,14 +172,27 @@ Public-facing tunnel, secret-bearing upstream. Use route transforms:
 For upstreams that authenticate via body fields, not headers:
 
 ```jsonc
-"Routes": {
-  "default": {
-    "ClusterId": "default",
-    "Match": { "Path": "{**catch-all}" },
-    "Metadata": {
-      "InjectJsonField:AuthToken": "your-server-side-secret",
-      "InjectJsonField:Count": "42",
-      "InjectJsonField:Nested": "{\"k\":\"v\"}"
+// src/AppHost/proxies/body-auth.json
+{
+  "DevTunnel": { "AnonymousAccess": true },
+  "ReverseProxy": {
+    "Routes": {
+      "default": {
+        "ClusterId": "default",
+        "Match": { "Path": "{**catch-all}" },
+        "Metadata": {
+          "InjectJsonField.AuthToken": "your-server-side-secret",
+          "InjectJsonField.Count": "42",
+          "InjectJsonField.Nested": "{\"k\":\"v\"}"
+        }
+      }
+    },
+    "Clusters": {
+      "default": {
+        "Destinations": {
+          "primary": { "Address": "http://localhost:5050/" }
+        }
+      }
     }
   }
 }
@@ -142,8 +204,9 @@ Each value parses as JSON first — `"42"` becomes a number, `"true"` a boolean,
 
 | File | Purpose |
 |---|---|
-| `src/AppHost/appsettings.json` | Tunnel ID, public/private toggle |
-| `src/Proxy/appsettings.json` | Routes, clusters, CORS policies, transforms |
+| `src/AppHost/proxies/<slug>.json` | One file per proxy: tunnel access mode, YARP routes/clusters, CORS policies |
+| `src/AppHost/appsettings.json` | Logging only. Optional `Proxies:Directory` to relocate the proxies folder |
+| `src/Proxy/appsettings.json` | Logging only — runtime YARP/CORS config comes from the per-pair file via `Proxy__ConfigFile` |
 
 YARP routes/clusters fully follow the upstream schema — see [YARP config files](https://learn.microsoft.com/aspnet/core/fundamentals/servers/yarp/config-files).
 
@@ -153,7 +216,7 @@ YARP routes/clusters fully follow the upstream schema — see [YARP config files
 
 `DevTunnel:AnonymousAccess: true` (the default) makes the tunnel URL **publicly reachable by anyone who knows it**. Don't proxy anything with secrets, dev databases, or unauthenticated admin surfaces over an anonymous tunnel.
 
-Set `DevTunnel:AnonymousAccess: false` in `src/AppHost/appsettings.json` for a private tunnel. Recipients then need a Microsoft/GitHub login the owner has authorised, or an `X-Tunnel-Authorization` token from `devtunnel token`. Note: private tunnels block cross-origin browser callers — `fetch()` from a deployed SPA on another origin can't complete the interactive sign-in.
+Set `DevTunnel:AnonymousAccess: false` in the per-pair file in `src/AppHost/proxies/` for a private tunnel. Recipients then need a Microsoft/GitHub login the owner has authorised, or an `X-Tunnel-Authorization` token from `devtunnel token`. Note: private tunnels block cross-origin browser callers — `fetch()` from a deployed SPA on another origin can't complete the interactive sign-in.
 
 To report a vulnerability privately, please open a [GitHub security advisory](https://github.com/LorcanChinnock/devtunnel-proxy/security/advisories/new) rather than a public issue.
 
@@ -179,8 +242,10 @@ After clearing, re-run — the CLI repopulates the cache cleanly. Your user logi
 
 ```
 src/
-├── AppHost/   .NET Aspire app host — wires the proxy to a Dev Tunnel
-└── Proxy/     ASP.NET Core + YARP — routes/clusters live in appsettings.json
+├── AppHost/
+│   ├── proxies/   one .json file per public URL — drop in to add a pair
+│   └── ...        .NET Aspire app host wiring proxies to dev tunnels
+└── Proxy/         ASP.NET Core + YARP — reads its slice via Proxy:ConfigFile
 tests/
 └── Proxy.Tests/   xUnit v3 integration + unit tests
 ```

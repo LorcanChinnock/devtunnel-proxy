@@ -1,57 +1,87 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
 
-var builder = DistributedApplication.CreateBuilder(args);
+namespace AppHost;
 
-var tunnelId = builder.Configuration["DevTunnel:Id"]
-    ?? throw new InvalidOperationException("DevTunnel:Id is required in appsettings.json.");
-
-var anonymousAccess = builder.Configuration.GetValue("DevTunnel:AnonymousAccess", true);
-
-VerifyDevtunnelTokenCache(tunnelId);
-
-var proxy = builder.AddProject<Projects.Proxy>("proxy");
-
-var tunnel = builder.AddDevTunnel("tunnel", tunnelId: tunnelId)
-                    .WithReference(proxy);
-
-if (anonymousAccess)
+public static class Program
 {
-    tunnel.WithAnonymousAccess();
-}
-
-builder.Build().Run();
-
-static void VerifyDevtunnelTokenCache(string tunnelId)
-{
-    string output;
-    try
+    public static void Main(string[] args)
     {
-        var psi = new ProcessStartInfo("devtunnel", $"show {tunnelId}")
+        var builder = DistributedApplication.CreateBuilder(args);
+
+        var directory = builder.Configuration["Proxies:Directory"]
+            ?? Path.Combine(builder.AppHostDirectory, "proxies");
+
+        var files = Directory.Exists(directory)
+            ? Directory.GetFiles(directory, "*.json").OrderBy(f => f, StringComparer.Ordinal).ToArray()
+            : [];
+
+        if (files.Length == 0)
         {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        using var p = Process.Start(psi);
-        if (p is null) return;
-        output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
-        p.WaitForExit(5_000);
-    }
-    catch
-    {
-        return;
+            throw new InvalidOperationException(
+                $"No proxy configurations found in '{directory}'. Add at least one <slug>.json file.");
+        }
+
+        VerifyDevtunnelTokenCache();
+
+        foreach (var file in files)
+        {
+            var name = Path.GetFileNameWithoutExtension(file);
+            if (!ProxySlug.IsValid(name))
+            {
+                throw new InvalidOperationException(
+                    $"Proxy config filename '{Path.GetFileName(file)}' is not a valid devtunnel slug " +
+                    "(lowercase letters, digits, hyphens; 1-32 chars; must start and end alphanumeric).");
+            }
+
+            var anonymous = ProxyConfigFile.LoadAnonymousAccess(file);
+
+            var proxy = builder.AddProject<Projects.Proxy>($"proxy-{name}")
+                               .WithEnvironment("Proxy__ConfigFile", file);
+
+            var tunnel = builder.AddDevTunnel($"tunnel-{name}", tunnelId: name)
+                                .WithReference(proxy);
+
+            if (anonymous)
+            {
+                tunnel.WithAnonymousAccess();
+            }
+        }
+
+        builder.Build().Run();
     }
 
-    if (!output.Contains("An item with the same key has already been added", StringComparison.Ordinal))
+    private static void VerifyDevtunnelTokenCache()
     {
-        return;
-    }
+        string output;
+        try
+        {
+            var psi = new ProcessStartInfo("devtunnel", "list")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            using var p = Process.Start(psi);
+            if (p is null) return;
+            output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+            p.WaitForExit(5_000);
+        }
+        catch
+        {
+            return;
+        }
 
-    throw new InvalidOperationException(
-        "The devtunnel CLI's tunnel-access-token cache is corrupt (duplicate 'host' key). " +
-        "Aspire's tunnel creation will fail. " +
-        "Fix on macOS: " +
-        "security delete-generic-password -s tunnels -a \"https://global.rel.tunnels.api.visualstudio.com/auth/tunnels\" " +
-        "(see README Troubleshooting for Linux/Windows).");
+        if (!output.Contains("An item with the same key has already been added", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            "The devtunnel CLI's tunnel-access-token cache is corrupt (duplicate 'host' key). " +
+            "Aspire's tunnel creation will fail. " +
+            "Fix on macOS: " +
+            "security delete-generic-password -s tunnels -a \"https://global.rel.tunnels.api.visualstudio.com/auth/tunnels\" " +
+            "(see README Troubleshooting for Linux/Windows).");
+    }
 }
