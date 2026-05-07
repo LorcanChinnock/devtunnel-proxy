@@ -24,7 +24,7 @@
     "Clusters": {
       "default": {
         "Destinations": {
-          "primary": { "Address": "https://example.com/" }
+          "primary": { "Address": "https://bing.com/" }
         }
       }
     }
