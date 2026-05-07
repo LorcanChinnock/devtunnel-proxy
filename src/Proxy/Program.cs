@@ -3,6 +3,12 @@ using Proxy.Transforms;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var configFile = builder.Configuration["Proxy:ConfigFile"];
+if (!string.IsNullOrEmpty(configFile))
+{
+    builder.Configuration.AddJsonFile(configFile, optional: false, reloadOnChange: true);
+}
+
 builder.Services.AddReverseProxy()
        .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
        .AddTransforms<InjectJsonFieldsTransformProvider>();
