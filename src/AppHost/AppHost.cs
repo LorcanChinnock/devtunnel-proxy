@@ -9,32 +9,54 @@ public static class Program
     {
         var builder = DistributedApplication.CreateBuilder(args);
 
-        var tunnelId = builder.Configuration["DevTunnel:Id"]
-            ?? throw new InvalidOperationException("DevTunnel:Id is required in appsettings.json.");
+        var directory = builder.Configuration["Proxies:Directory"]
+            ?? Path.Combine(builder.AppHostDirectory, "proxies");
 
-        var anonymousAccess = builder.Configuration.GetValue("DevTunnel:AnonymousAccess", true);
+        var files = Directory.Exists(directory)
+            ? Directory.GetFiles(directory, "*.json").OrderBy(f => f, StringComparer.Ordinal).ToArray()
+            : [];
 
-        VerifyDevtunnelTokenCache(tunnelId);
-
-        var proxy = builder.AddProject<Projects.Proxy>("proxy");
-
-        var tunnel = builder.AddDevTunnel("tunnel", tunnelId: tunnelId)
-                            .WithReference(proxy);
-
-        if (anonymousAccess)
+        if (files.Length == 0)
         {
-            tunnel.WithAnonymousAccess();
+            throw new InvalidOperationException(
+                $"No proxy configurations found in '{directory}'. Add at least one <slug>.json file.");
+        }
+
+        VerifyDevtunnelTokenCache();
+
+        foreach (var file in files)
+        {
+            var name = Path.GetFileNameWithoutExtension(file);
+            if (!ProxySlug.IsValid(name))
+            {
+                throw new InvalidOperationException(
+                    $"Proxy config filename '{Path.GetFileName(file)}' is not a valid devtunnel slug " +
+                    "(lowercase letters, digits, hyphens; 1-32 chars; must start and end alphanumeric).");
+            }
+
+            var anonymous = ProxyConfigFile.LoadAnonymousAccess(file);
+
+            var proxy = builder.AddProject<Projects.Proxy>($"proxy-{name}")
+                               .WithEnvironment("Proxy__ConfigFile", file);
+
+            var tunnel = builder.AddDevTunnel($"tunnel-{name}", tunnelId: name)
+                                .WithReference(proxy);
+
+            if (anonymous)
+            {
+                tunnel.WithAnonymousAccess();
+            }
         }
 
         builder.Build().Run();
     }
 
-    private static void VerifyDevtunnelTokenCache(string tunnelId)
+    private static void VerifyDevtunnelTokenCache()
     {
         string output;
         try
         {
-            var psi = new ProcessStartInfo("devtunnel", $"show {tunnelId}")
+            var psi = new ProcessStartInfo("devtunnel", "list")
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
