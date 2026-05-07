@@ -64,6 +64,12 @@ Stripe, GitHub, Slack, etc. need a public HTTPS endpoint to send events. Point t
 {
   "DevTunnel": { "AnonymousAccess": true },
   "ReverseProxy": {
+    "Routes": {
+      "default": {
+        "ClusterId": "default",
+        "Match": { "Path": "{**catch-all}" }
+      }
+    },
     "Clusters": {
       "default": {
         "Destinations": {
@@ -175,9 +181,9 @@ For upstreams that authenticate via body fields, not headers:
         "ClusterId": "default",
         "Match": { "Path": "{**catch-all}" },
         "Metadata": {
-          "InjectJsonField:AuthToken": "your-server-side-secret",
-          "InjectJsonField:Count": "42",
-          "InjectJsonField:Nested": "{\"k\":\"v\"}"
+          "InjectJsonField.AuthToken": "your-server-side-secret",
+          "InjectJsonField.Count": "42",
+          "InjectJsonField.Nested": "{\"k\":\"v\"}"
         }
       }
     },
