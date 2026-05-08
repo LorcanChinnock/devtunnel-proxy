@@ -9,37 +9,43 @@ public static class Program
     {
         var builder = DistributedApplication.CreateBuilder(args);
 
-        var directory = builder.Configuration["Proxies:Directory"]
-            ?? Path.Combine(builder.AppHostDirectory, "proxies");
+        var proxyDir = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Proxy"));
+        var env = builder.Environment.EnvironmentName;
 
-        var files = Directory.Exists(directory)
-            ? Directory.GetFiles(directory, "*.json").OrderBy(f => f, StringComparer.Ordinal).ToArray()
-            : [];
+        var proxyConfig = new ConfigurationBuilder()
+            .SetBasePath(proxyDir)
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile($"appsettings.{env}.json", optional: true)
+            .Build();
 
-        if (files.Length == 0)
+        var slugs = proxyConfig.GetSection("Proxies").GetChildren().ToArray();
+        if (slugs.Length == 0)
         {
             throw new InvalidOperationException(
-                $"No proxy configurations found in '{directory}'. Add at least one <slug>.json file.");
+                $"No proxies defined under 'Proxies' in {proxyDir}/appsettings.json " +
+                $"or appsettings.{env}.json. Add at least one entry: " +
+                "\"Proxies\": { \"<slug>\": { ... } }.");
         }
 
         VerifyDevtunnelLogin();
         VerifyDevtunnelTokenCache();
 
-        foreach (var file in files)
+        foreach (var section in slugs)
         {
-            var name = Path.GetFileNameWithoutExtension(file);
+            var name = section.Key;
             if (!ProxySlug.IsValid(name))
             {
                 throw new InvalidOperationException(
-                    $"Proxy config filename '{Path.GetFileName(file)}' is not a valid devtunnel slug " +
+                    $"Proxy slug '{name}' is not a valid devtunnel slug " +
                     "(lowercase letters, digits, hyphens; 1-32 chars; must start and end alphanumeric).");
             }
 
-            var anonymous = ProxyConfigFile.LoadAnonymousAccess(file);
+            var anonymous = section.GetValue("DevTunnel:AnonymousAccess", true);
+            var port = section.GetValue<int?>("Port");
 
             var proxy = builder.AddProject<Projects.Proxy>($"proxy-{name}")
-                               .WithEndpoint("https", e => { e.Port = null; e.TargetPort = null; })
-                               .WithEnvironment("Proxy__ConfigFile", file);
+                               .WithEndpoint("https", e => { e.Port = port; e.TargetPort = null; })
+                               .WithEnvironment("Proxy__Slug", name);
 
             var tunnel = builder.AddDevTunnel($"tunnel-{name}", tunnelId: name)
                                 .WithReference(proxy);

@@ -6,6 +6,13 @@ namespace Proxy.Tests.Integration;
 
 internal sealed class ProxyAppFactory : WebApplicationFactory<Program>
 {
+    private const string Slug = "test";
+
+    static ProxyAppFactory()
+    {
+        Environment.SetEnvironmentVariable("Proxy__Slug", Slug);
+    }
+
     private readonly string _upstreamUrl;
     private readonly IDictionary<string, string?> _extraConfig;
 
@@ -22,14 +29,14 @@ internal sealed class ProxyAppFactory : WebApplicationFactory<Program>
         {
             var overrides = new Dictionary<string, string?>
             {
-                ["Cors:Policies:AllowAll:AllowedOrigins:0"] = "*",
-                ["Cors:Policies:AllowAll:AllowedMethods:0"] = "*",
-                ["Cors:Policies:AllowAll:AllowedHeaders:0"] = "*",
-                ["Cors:Policies:AllowAll:AllowCredentials"] = "false",
-                ["ReverseProxy:Routes:default:ClusterId"] = "default",
-                ["ReverseProxy:Routes:default:CorsPolicy"] = "AllowAll",
-                ["ReverseProxy:Routes:default:Match:Path"] = "{**catch-all}",
-                ["ReverseProxy:Clusters:default:Destinations:primary:Address"] = _upstreamUrl,
+                [$"Proxies:{Slug}:Cors:Policies:AllowAll:AllowedOrigins:0"] = "*",
+                [$"Proxies:{Slug}:Cors:Policies:AllowAll:AllowedMethods:0"] = "*",
+                [$"Proxies:{Slug}:Cors:Policies:AllowAll:AllowedHeaders:0"] = "*",
+                [$"Proxies:{Slug}:Cors:Policies:AllowAll:AllowCredentials"] = "false",
+                [$"Proxies:{Slug}:ReverseProxy:Routes:default:ClusterId"] = "default",
+                [$"Proxies:{Slug}:ReverseProxy:Routes:default:CorsPolicy"] = "AllowAll",
+                [$"Proxies:{Slug}:ReverseProxy:Routes:default:Match:Path"] = "{**catch-all}",
+                [$"Proxies:{Slug}:ReverseProxy:Clusters:default:Destinations:primary:Address"] = _upstreamUrl,
             };
             foreach (var kvp in _extraConfig)
             {

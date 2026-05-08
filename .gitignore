@@ -485,4 +485,3 @@ $RECYCLE.BIN/
 
 # Local secrets overlay - never commit
 **/appsettings.Development.json
-src/AppHost/proxies/*.json

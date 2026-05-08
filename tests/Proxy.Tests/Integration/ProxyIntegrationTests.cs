@@ -40,18 +40,57 @@ public class ProxyIntegrationTests
     }
 
     [Fact]
+    public async Task Cors_preflight_with_content_type_request_header_returns_2xx()
+    {
+        await using var upstream = await EchoUpstreamServer.StartAsync();
+        await using var factory = new ProxyAppFactory(upstream.BaseUrl);
+        using var client = factory.CreateClient();
+
+        var request = new HttpRequestMessage(HttpMethod.Options, "/api/test/v1/configuration/get");
+        request.Headers.Add("Origin", "https://x.example");
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+        request.Headers.Add("Access-Control-Request-Headers", "content-type");
+
+        var response = await client.SendAsync(request);
+
+        Assert.True((int)response.StatusCode is >= 200 and < 300, $"Expected 2xx but got {response.StatusCode}");
+        Assert.Equal("*", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+    }
+
+    [Fact]
+    public async Task Cors_preflight_short_circuits_when_route_has_inject_json_field_metadata()
+    {
+        await using var upstream = await EchoUpstreamServer.StartAsync();
+        await using var factory = new ProxyAppFactory(upstream.BaseUrl, new Dictionary<string, string?>
+        {
+            ["Proxies:test:ReverseProxy:Routes:default:Metadata:InjectJsonField.ClientToken"] = "secret",
+        });
+        using var client = factory.CreateClient();
+
+        var request = new HttpRequestMessage(HttpMethod.Options, "/api/connector/v1/configuration/get");
+        request.Headers.Add("Origin", "https://x.example");
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+        request.Headers.Add("Access-Control-Request-Headers", "content-type");
+
+        var response = await client.SendAsync(request);
+
+        Assert.True((int)response.StatusCode is >= 200 and < 300, $"Expected 2xx but got {response.StatusCode}");
+        Assert.Equal("*", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+    }
+
+    [Fact]
     public async Task Cors_explicit_origin_blocks_unlisted_origin()
     {
         await using var upstream = await EchoUpstreamServer.StartAsync();
         await using var factory = new ProxyAppFactory(upstream.BaseUrl, new Dictionary<string, string?>
         {
-            ["Cors:Policies:Strict:AllowedOrigins:0"] = "https://allowed.example",
-            ["Cors:Policies:Strict:AllowedMethods:0"] = "*",
-            ["Cors:Policies:Strict:AllowedHeaders:0"] = "*",
-            ["ReverseProxy:Routes:strict:ClusterId"] = "default",
-            ["ReverseProxy:Routes:strict:CorsPolicy"] = "Strict",
-            ["ReverseProxy:Routes:strict:Order"] = "-1",
-            ["ReverseProxy:Routes:strict:Match:Path"] = "/strict/{**rest}",
+            ["Proxies:test:Cors:Policies:Strict:AllowedOrigins:0"] = "https://allowed.example",
+            ["Proxies:test:Cors:Policies:Strict:AllowedMethods:0"] = "*",
+            ["Proxies:test:Cors:Policies:Strict:AllowedHeaders:0"] = "*",
+            ["Proxies:test:ReverseProxy:Routes:strict:ClusterId"] = "default",
+            ["Proxies:test:ReverseProxy:Routes:strict:CorsPolicy"] = "Strict",
+            ["Proxies:test:ReverseProxy:Routes:strict:Order"] = "-1",
+            ["Proxies:test:ReverseProxy:Routes:strict:Match:Path"] = "/strict/{**rest}",
         });
         using var client = factory.CreateClient();
 
@@ -70,13 +109,13 @@ public class ProxyIntegrationTests
         await using var upstream = await EchoUpstreamServer.StartAsync();
         await using var factory = new ProxyAppFactory(upstream.BaseUrl, new Dictionary<string, string?>
         {
-            ["ReverseProxy:Routes:inject:ClusterId"] = "default",
-            ["ReverseProxy:Routes:inject:CorsPolicy"] = "AllowAll",
-            ["ReverseProxy:Routes:inject:Order"] = "-1",
-            ["ReverseProxy:Routes:inject:Match:Path"] = "/inject/{**rest}",
-            ["ReverseProxy:Routes:inject:Metadata:InjectJsonField.tenant"] = "\"acme\"",
-            ["ReverseProxy:Routes:inject:Metadata:InjectJsonField.count"] = "3",
-            ["ReverseProxy:Routes:inject:Metadata:InjectJsonField.nested"] = "{\"k\":1}",
+            ["Proxies:test:ReverseProxy:Routes:inject:ClusterId"] = "default",
+            ["Proxies:test:ReverseProxy:Routes:inject:CorsPolicy"] = "AllowAll",
+            ["Proxies:test:ReverseProxy:Routes:inject:Order"] = "-1",
+            ["Proxies:test:ReverseProxy:Routes:inject:Match:Path"] = "/inject/{**rest}",
+            ["Proxies:test:ReverseProxy:Routes:inject:Metadata:InjectJsonField.tenant"] = "\"acme\"",
+            ["Proxies:test:ReverseProxy:Routes:inject:Metadata:InjectJsonField.count"] = "3",
+            ["Proxies:test:ReverseProxy:Routes:inject:Metadata:InjectJsonField.nested"] = "{\"k\":1}",
         });
         using var client = factory.CreateClient();
 
@@ -98,11 +137,11 @@ public class ProxyIntegrationTests
         await using var upstream = await EchoUpstreamServer.StartAsync();
         await using var factory = new ProxyAppFactory(upstream.BaseUrl, new Dictionary<string, string?>
         {
-            ["ReverseProxy:Routes:inject:ClusterId"] = "default",
-            ["ReverseProxy:Routes:inject:CorsPolicy"] = "AllowAll",
-            ["ReverseProxy:Routes:inject:Order"] = "-1",
-            ["ReverseProxy:Routes:inject:Match:Path"] = "/inject/{**rest}",
-            ["ReverseProxy:Routes:inject:Metadata:InjectJsonField.tenant"] = "\"acme\"",
+            ["Proxies:test:ReverseProxy:Routes:inject:ClusterId"] = "default",
+            ["Proxies:test:ReverseProxy:Routes:inject:CorsPolicy"] = "AllowAll",
+            ["Proxies:test:ReverseProxy:Routes:inject:Order"] = "-1",
+            ["Proxies:test:ReverseProxy:Routes:inject:Match:Path"] = "/inject/{**rest}",
+            ["Proxies:test:ReverseProxy:Routes:inject:Metadata:InjectJsonField.tenant"] = "\"acme\"",
         });
         using var client = factory.CreateClient();
 
@@ -120,11 +159,11 @@ public class ProxyIntegrationTests
         await using var upstream = await EchoUpstreamServer.StartAsync();
         await using var factory = new ProxyAppFactory(upstream.BaseUrl, new Dictionary<string, string?>
         {
-            ["ReverseProxy:Routes:inject:ClusterId"] = "default",
-            ["ReverseProxy:Routes:inject:CorsPolicy"] = "AllowAll",
-            ["ReverseProxy:Routes:inject:Order"] = "-1",
-            ["ReverseProxy:Routes:inject:Match:Path"] = "/inject/{**rest}",
-            ["ReverseProxy:Routes:inject:Metadata:InjectJsonField.tenant"] = "\"acme\"",
+            ["Proxies:test:ReverseProxy:Routes:inject:ClusterId"] = "default",
+            ["Proxies:test:ReverseProxy:Routes:inject:CorsPolicy"] = "AllowAll",
+            ["Proxies:test:ReverseProxy:Routes:inject:Order"] = "-1",
+            ["Proxies:test:ReverseProxy:Routes:inject:Match:Path"] = "/inject/{**rest}",
+            ["Proxies:test:ReverseProxy:Routes:inject:Metadata:InjectJsonField.tenant"] = "\"acme\"",
         });
         using var client = factory.CreateClient();
 

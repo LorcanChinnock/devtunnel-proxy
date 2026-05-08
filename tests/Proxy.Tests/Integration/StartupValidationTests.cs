@@ -10,8 +10,8 @@ public class StartupValidationTests
             upstream.BaseUrl,
             extraConfig: new Dictionary<string, string?>
             {
-                ["Cors:Policies:bad:AllowedOrigins:0"] = "*",
-                ["Cors:Policies:bad:AllowCredentials"] = "true",
+                ["Proxies:test:Cors:Policies:bad:AllowedOrigins:0"] = "*",
+                ["Proxies:test:Cors:Policies:bad:AllowCredentials"] = "true",
             });
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
