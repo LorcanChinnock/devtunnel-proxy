@@ -27,7 +27,6 @@ public static class Program
                 "\"Proxies\": { \"<slug>\": { ... } }.");
         }
 
-        VerifyDevtunnelLogin();
         VerifyDevtunnelTokenCache();
 
         foreach (var section in slugs)
@@ -57,38 +56,6 @@ public static class Program
         }
 
         builder.Build().Run();
-    }
-
-    private static void VerifyDevtunnelLogin()
-    {
-        string output;
-        try
-        {
-            var psi = new ProcessStartInfo("devtunnel", "user show")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-            using var p = Process.Start(psi);
-            if (p is null) return;
-            output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
-            p.WaitForExit(5_000);
-        }
-        catch
-        {
-            return;
-        }
-
-        if (!output.Contains("Login token expired", StringComparison.OrdinalIgnoreCase)
-            && !output.Contains("Not logged in", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        throw new InvalidOperationException(
-            "The devtunnel CLI is not authenticated (login token expired or missing). " +
-            "Run 'devtunnel user login -g' (GitHub) or 'devtunnel user login -d' (Microsoft) before starting the AppHost.");
     }
 
     private static void VerifyDevtunnelTokenCache()
